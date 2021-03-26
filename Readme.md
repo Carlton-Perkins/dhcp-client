@@ -39,3 +39,7 @@ High level overview from <https://medium.com/@bromiley/full-packet-friday-dhcp-a
    2. System can now use the IP address
    3. Contains options 53,58,59,51,54,1
    4. Ends with padding
+
+## Notes
+
+- Ports less then 1024 require root to bind too.

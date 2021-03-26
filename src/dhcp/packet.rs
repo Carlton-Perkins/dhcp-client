@@ -1,31 +1,106 @@
+use std::convert::TryInto;
+
+use mac_address::MacAddress;
+
 use crate::dhcp::traits::{Deserialize, Serialize};
 
+pub type TransactionToken = [u8; 4];
+
 #[derive(Eq, PartialEq, Debug)]
-struct DHCPPacket {
+pub struct DHCPPacket {
     op: u8,
     htype: u8,
     hlen: u8,
     hops: u8,
-    xid: u32,
-    secs: u16,
-    flags: u16,
-    ciaddr: u32,
-    yiaddr: u32,
-    siaddr: u32,
-    giaddr: u32,
-    chaddr: [u32; 6],
+    xid: [u8; 4],
+    secs: [u8; 2],
+    flags: [u8; 2],
+    ciaddr: [u8; 4],
+    yiaddr: [u8; 4],
+    siaddr: [u8; 4],
+    giaddr: [u8; 4],
+    chaddr: [u8; 208],
+    cookie: [u8; 4],
     options: Vec<DHCPOption>,
 }
 
 #[derive(Eq, PartialEq, Debug)]
-struct DHCPOption {
+pub struct DHCPOption {
     id: u8,
     body: Vec<u8>,
 }
 
+impl DHCPPacket {
+    pub fn new() -> Self {
+        DHCPPacket {
+            op: 0x01,
+            htype: 0x01,
+            hlen: 0x06,
+            hops: 0x00,
+            xid: [0x00; 4],
+            secs: [0x00; 2],
+            flags: [0x80, 0x00],
+            ciaddr: [0x00; 4],
+            yiaddr: [0x00; 4],
+            siaddr: [0x00; 4],
+            giaddr: [0x00; 4],
+            chaddr: [0x00; 208],
+            cookie: [0x63, 0x82, 0x53, 0x63],
+            options: vec![],
+        }
+    }
+
+    pub fn with_transaction(mut self, token: &TransactionToken) -> Self {
+        self.xid = *token;
+        self
+    }
+
+    pub fn with_option(mut self, option: DHCPOption) -> Self {
+        self.options.push(option);
+        self
+    }
+
+    pub fn with_mac_address(mut self, maddr: &MacAddress) -> Self {
+        self.chaddr = maddr
+            .bytes()
+            .iter()
+            .chain([0; 202].iter())
+            .cloned()
+            .collect::<Vec<_>>()
+            .try_into()
+            .expect("Length of chaddr is unexpected");
+        self
+    }
+}
 impl Serialize for DHCPPacket {
     fn serialize(&self) -> Vec<u8> {
-        todo!()
+        let mut buffer = Vec::new();
+
+        buffer.push(self.op);
+        buffer.push(self.htype);
+        buffer.push(self.hlen);
+        buffer.push(self.hops);
+        buffer.extend_from_slice(&self.xid);
+        buffer.extend_from_slice(&self.secs);
+        buffer.extend_from_slice(&self.flags);
+        buffer.extend_from_slice(&self.ciaddr);
+        buffer.extend_from_slice(&self.yiaddr);
+        buffer.extend_from_slice(&self.siaddr);
+        buffer.extend_from_slice(&self.giaddr);
+        buffer.extend_from_slice(&self.chaddr);
+        buffer.extend_from_slice(&self.cookie);
+
+        self.options
+            .iter()
+            .for_each(|x| buffer.extend_from_slice(&x.serialize()));
+        // Options list needs to finish with the END option
+        buffer.push(0xff);
+
+        // Align buffer to 32 bytes
+        let buffer_byte_len = buffer.len();
+        (0..buffer_byte_len % 32).for_each(|_| buffer.push(0x00));
+
+        buffer
     }
 }
 
@@ -35,9 +110,20 @@ impl Deserialize for DHCPPacket {
     }
 }
 
+impl DHCPOption {
+    pub fn new(id: u8, body: Vec<u8>) -> Self {
+        DHCPOption { id, body }
+    }
+}
+
 impl Serialize for DHCPOption {
     fn serialize(&self) -> Vec<u8> {
-        todo!()
+        let mut buffer = Vec::new();
+
+        buffer.push(self.id);
+        buffer.push(self.body.len().try_into().unwrap());
+        buffer.extend_from_slice(&self.body);
+        buffer
     }
 }
 
@@ -96,44 +182,14 @@ mod dhcp_packet {
     #[test]
     fn test_serialize_packet() {
         assert_eq!(
-            DHCPPacket {
-                op: 0x01,
-                htype: 0x01,
-                hlen: 0x06,
-                hops: 0x00,
-                xid: 0x00000000,
-                secs: 0x0000,
-                flags: 0x0000,
-                ciaddr: 0x00000000,
-                yiaddr: 0x00000000,
-                siaddr: 0x00000000,
-                giaddr: 0x00000000,
-                chaddr: [0x00000000; 6],
-                options: vec![],
-            }
-            .serialize()
-            .len(), // TODO Using u8 len instead of real value for now
+            DHCPPacket::new().serialize().len(), // TODO Using u8 len instead of real value for now
             12
         )
     }
 
     #[test]
     fn test_deserialize_packet() {
-        let packet = DHCPPacket {
-            op: 0x01,
-            htype: 0x01,
-            hlen: 0x06,
-            hops: 0x00,
-            xid: 0x00000000,
-            secs: 0x0000,
-            flags: 0x0000,
-            ciaddr: 0x00000000,
-            yiaddr: 0x00000000,
-            siaddr: 0x00000000,
-            giaddr: 0x00000000,
-            chaddr: [0x00000000; 6],
-            options: vec![],
-        };
+        let packet = DHCPPacket::new();
 
         assert_eq!(DHCPPacket::deserialize(&packet.serialize()), packet);
     }
