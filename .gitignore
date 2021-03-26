@@ -1,0 +1,6 @@
+# Rust build directory
+/target
+
+# VScode files
+*.code-workspace
+*.vscode
