@@ -1,2 +1,2 @@
-mod traits;
 mod packet;
+mod traits;

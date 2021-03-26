@@ -1,4 +1,4 @@
-use crate::dhcp::traits::{Serialize, Deserialize};
+use crate::dhcp::traits::{Deserialize, Serialize};
 
 #[derive(Eq, PartialEq, Debug)]
 struct DHCPPacket {
@@ -64,8 +64,7 @@ mod dhcp_packet {
 
     #[test]
     fn test_deserialize_option() {
-        // Vec<u8> should deserialize to <type><length><body>
-        // where length is the byte size of the body
+        // Vec<u8> should deserialize to options
 
         assert_eq!(
             DHCPOption {
