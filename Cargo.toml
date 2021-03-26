@@ -1,5 +1,5 @@
 [package]
-name = "dchp-client"
+name = "dchp_client"
 version = "0.1.0"
 authors = ["Carlton Perkins <carltonrp52@gmail.com>"]
 edition = "2018"
