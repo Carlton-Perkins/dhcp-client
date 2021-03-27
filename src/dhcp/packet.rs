@@ -173,14 +173,12 @@ impl Deserialize for DhcpOption {
         let data = data.to_vec();
         let mut cursor = 0;
         let mut option_buffer = vec![];
-        println!("option data {:?}", data);
         while cursor < data.len() {
             let id = data[cursor];
             if id == 255 {
                 break;
             }
             let len = data[cursor + 1] as usize;
-            println!("Id {}, Len {}", id, len);
             let body = &data[(cursor + 2)..((cursor + 2) + len)];
 
             option_buffer.push(DhcpOption {
@@ -197,6 +195,7 @@ impl Deserialize for DhcpOption {
 mod dhcp_packet {
     use super::*;
     use pretty_assertions::assert_eq;
+    use rand::random;
 
     #[test]
     fn test_serialize_option() {
@@ -378,5 +377,34 @@ mod dhcp_packet {
         let generated_packet = DhcpPacket::deserialize(&test_packet).unwrap();
 
         assert_eq!(generated_packet, expected_test_packet);
+    }
+
+    #[test]
+    fn test_random_packet_serialization() {
+        let test_count = 10000;
+
+        for _ in 0..test_count {
+            let random_packet = DhcpPacket {
+                op: random(),
+                htype: random(),
+                hlen: random(),
+                hops: random(),
+                xid: random(),
+                secs: random(),
+                flags: random(),
+                ciaddr: random(),
+                yiaddr: random(),
+                siaddr: random(),
+                giaddr: random(),
+                chaddr: [0; 208], // Random cant generated arrays this big, so skip this for now
+                cookie: random(),
+                options: vec![], // TODO Need a good way to generate valid options
+            };
+
+            let serialized_packet = random_packet.serialize();
+            let deserialized_packet = DhcpPacket::deserialize(&serialized_packet).unwrap();
+
+            assert_eq!(random_packet, deserialized_packet);
+        }
     }
 }
