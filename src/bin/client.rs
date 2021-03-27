@@ -11,7 +11,7 @@ use std::{
     time::Duration,
 };
 
-fn main() {
+fn main() -> Result<(), usize> {
     // Setup logging
     SimpleLogger::new().init().unwrap();
 
@@ -36,9 +36,10 @@ fn main() {
         "Session transaction token {:#x?}",
         u32::from_be_bytes(transaction_token)
     );
-    let requested_ip = Ipv4Addr::new(192, 168, 1, 98);
+    let requested_ip = Ipv4Addr::new(192, 168, 1, 99);
     info!("Requesting Ip {}", requested_ip);
-    let mac_address = MacAddress::new([0x10, 0x7b, 0x44, 0x93, 0xe6, 0xd0]);
+    let mac_address = MacAddress::new([0x10, 0x7b, 0x44, 0x93, 0xe6, 0xd0]); // Desktop
+                                                                             // let mac_address = MacAddress::new([0x52, 0x54, 0x00, 0x39, 0x8d, 0xc0]); // VM
     info!("Using MacAddress {}", mac_address);
 
     let discovery_packet = DhcpPacket::new()
@@ -65,9 +66,7 @@ fn main() {
         let rsize = rsock.recv(&mut rbuffer).expect("No OFFER message received");
         // ! TODO if rsize == rbuffer.capacity, we have lost data
         let rbuffer_sliced = &rbuffer[0..rsize];
-        // println!("rbuffer size: {} \t rbuffer {:?}", rsize, rbuffer_sliced);
         let rpacket = DhcpPacket::deserialize(rbuffer_sliced).expect("OFFER packet not parseable");
-        // println!("Received Packet: {:?}", rpacket);
         let is_correct_packet =
             rpacket.is_type(DhcpMessageType::Offer) && rpacket.is_transaction(&transaction_token);
         if is_correct_packet {
@@ -90,9 +89,11 @@ fn main() {
     // ? TODO Do we care if the offered_ip is NOT the one we requested ?
     if requested_ip != offered_ip {
         warn!(
-            "DHCP server offered ip {} but we requested {}...",
+            "DHCP server offered ip {} but we requested {}",
             offered_ip, requested_ip
         );
+        // ! TODO We could change our requested_ip into the offered_ip to continue, but the user should choose that
+        return Err(1);
     }
     // ? TODO Do we care if the lease is less then requested ?
 
@@ -131,9 +132,15 @@ fn main() {
         let rpacket =
             DhcpPacket::deserialize(rbuffer_sliced).expect("ACK/NAK packet not parseable");
         // println!("Received Packet: {:?}", rpacket);
+        let sender = rpacket.get_server_ip();
+        let from_correct_sender = match sender {
+            Some(addr) => addr == dhcp_server_ip,
+            None => false,
+        };
         let is_correct_packet = (rpacket.is_type(DhcpMessageType::Ack)
             || rpacket.is_type(DhcpMessageType::Nak))
-            && rpacket.is_transaction(&transaction_token);
+            && rpacket.is_transaction(&transaction_token)
+            && from_correct_sender;
         // ! TODO Add check to make sure that the ACK/NAK is from the server we sent the request too
         if is_correct_packet {
             info!("Received the ACK/NAK packet");
@@ -161,4 +168,5 @@ fn main() {
             offered_lease_time.as_secs()
         );
     }
+    Ok(())
 }
