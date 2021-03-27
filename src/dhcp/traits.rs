@@ -1,9 +1,12 @@
 pub trait Serialize {
-    fn serialize(&self) -> Vec<u8>;
+    type Out;
+
+    fn serialize(&self) -> Self::Out;
 }
 
 pub trait Deserialize {
-    fn deserialize(data: &Vec<u8>) -> Option<Self>
+    type Out;
+    fn deserialize(data: &[u8]) -> Option<Self::Out>
     where
-        Self: Sized;
+        Self::Out: Sized;
 }

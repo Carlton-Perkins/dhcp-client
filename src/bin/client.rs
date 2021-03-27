@@ -38,12 +38,10 @@ fn main() {
     loop {
         let mut rbuffer = [0x0; 1024];
         let rsize = rsock.recv(&mut rbuffer).expect("No OFFER message received");
-        println!("{:?}", rbuffer);
-
         // ! TODO if rsize == rbuffer.capacity, we have lost data
-
-        let rbuffer_sliced = &rbuffer[0..rsize].into();
-        let rpacket = DhcpPacket::deserialize(rbuffer_sliced);
+        let rbuffer_sliced = &rbuffer[0..rsize];
+        println!("rbuffer size: {} \t rbuffer {:?}", rsize, rbuffer_sliced);
+        let rpacket = DhcpPacket::deserialize(rbuffer_sliced).expect("OFFER packet not parseable");
     }
     // Send REQUEST message
 
