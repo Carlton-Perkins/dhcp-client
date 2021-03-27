@@ -1,10 +1,33 @@
-use std::convert::TryInto;
-
-use mac_address::MacAddress;
-
 use crate::dhcp::traits::{Deserialize, Serialize};
-
+use mac_address::MacAddress;
+use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
+use std::{convert::TryInto, net::Ipv4Addr, time::Duration};
 pub type TransactionToken = [u8; 4];
+
+#[derive(Copy, Clone, Eq, PartialEq, FromPrimitive)]
+pub enum DhcpMessageType {
+    Discover = 1,
+    Offer = 2,
+    Request = 3,
+    Ack = 5,
+    Nak = 6,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum DhcpOptionType {
+    SubnetMask = 1,
+    RouterIp = 3,
+    DnsServerIp = 6,
+    HostName = 12,
+    RequestedIp = 50,
+    LeaseTime = 51,
+    MessageType = 53,
+    DhcpServerIp = 54,
+    ParameterRequest = 55,
+    ClientId = 61,
+    End = 255,
+}
 
 #[derive(Eq, PartialEq, Debug)]
 pub struct DhcpPacket {
@@ -71,6 +94,69 @@ impl DhcpPacket {
             .expect("Length of chaddr is unexpected");
         self
     }
+
+    pub fn is_type(&self, mtype: DhcpMessageType) -> bool {
+        match self.get_type() {
+            Some(t) => mtype == t,
+            None => false,
+        }
+    }
+
+    pub fn get_type(&self) -> Option<DhcpMessageType> {
+        let body = self.get_option_body(DhcpOptionType::MessageType);
+        match body {
+            Some(b) => FromPrimitive::from_u8(b[0]),
+            None => None,
+        }
+    }
+
+    pub fn is_transaction(&self, token: &TransactionToken) -> bool {
+        *token == self.xid
+    }
+
+    pub fn get_client_ip(&self) -> Ipv4Addr {
+        Ipv4Addr::from(self.yiaddr)
+    }
+
+    pub fn get_lease_time(&self) -> Option<Duration> {
+        let body = self.get_option_body(DhcpOptionType::LeaseTime);
+        match body {
+            Some(b) => Some(Duration::from_secs(
+                u32::from_be_bytes(b.try_into().unwrap()) as u64, // assume BigEndian, should be safe on the net
+            )),
+            None => None,
+        }
+    }
+
+    pub fn get_server_ip(&self) -> Option<Ipv4Addr> {
+        let body = self.get_option_body(DhcpOptionType::DhcpServerIp);
+        Self::get_option_ip_like(body)
+    }
+
+    pub fn get_subnet(&self) -> Option<Ipv4Addr> {
+        let body = self.get_option_body(DhcpOptionType::SubnetMask);
+        Self::get_option_ip_like(body)
+    }
+
+    pub fn get_router_ip(&self) -> Option<Ipv4Addr> {
+        let body = self.get_option_body(DhcpOptionType::RouterIp);
+        Self::get_option_ip_like(body)
+    }
+
+    fn get_option_body(&self, otype: DhcpOptionType) -> Option<&[u8]> {
+        let body = self.options.iter().find(|x| x.id == otype as u8);
+        match body {
+            Some(b) => Some(&b.body),
+            None => None,
+        }
+    }
+
+    fn get_option_ip_like(body: Option<&[u8]>) -> Option<Ipv4Addr> {
+        match body {
+            Some(b) => Some(Ipv4Addr::from(u32::from_be_bytes(b.try_into().unwrap()))), // assume BigEndian, should be safe on the net
+            None => None,
+        }
+    }
 }
 
 impl Default for DhcpPacket {
@@ -101,7 +187,7 @@ impl Serialize for DhcpPacket {
             .iter()
             .for_each(|x| buffer.extend_from_slice(&x.serialize()));
         // Options list needs to finish with the END option
-        buffer.push(0xff);
+        buffer.push(DhcpOptionType::End as u8);
 
         // Align buffer to 32 bytes
         let buffer_byte_len = buffer.len();
@@ -175,7 +261,7 @@ impl Deserialize for DhcpOption {
         let mut option_buffer = vec![];
         while cursor < data.len() {
             let id = data[cursor];
-            if id == 255 {
+            if id == DhcpOptionType::End as u8 {
                 break;
             }
             let len = data[cursor + 1] as usize;
@@ -406,5 +492,29 @@ mod dhcp_packet {
 
             assert_eq!(random_packet, deserialized_packet);
         }
+    }
+
+    #[test]
+    fn test_packet_is_type() {
+        let packet_a = DhcpPacket::new().with_option(DhcpOption::new(53, vec![1]));
+        let packet_b = DhcpPacket::new().with_option(DhcpOption::new(53, vec![2]));
+
+        assert!(packet_a.is_type(DhcpMessageType::Discover));
+        assert!(!packet_a.is_type(DhcpMessageType::Offer));
+        assert!(packet_b.is_type(DhcpMessageType::Offer));
+        assert!(!packet_b.is_type(DhcpMessageType::Discover));
+    }
+
+    #[test]
+    fn test_packet_is_transaction() {
+        let token_a: TransactionToken = random();
+        let token_b: TransactionToken = random();
+        let packet_a = DhcpPacket::new().with_transaction(&token_a);
+        let packet_b = DhcpPacket::new().with_transaction(&token_b);
+
+        assert!(packet_a.is_transaction(&token_a));
+        assert!(!packet_a.is_transaction(&token_b));
+        assert!(packet_b.is_transaction(&token_b));
+        assert!(!packet_b.is_transaction(&token_a));
     }
 }
