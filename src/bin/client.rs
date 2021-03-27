@@ -1,4 +1,4 @@
-use dchp_client::dhcp::{DHCPOption, DHCPPacket, Serialize, TransactionToken};
+use dchp_client::dhcp::{Deserialize, DhcpOption, DhcpPacket, Serialize, TransactionToken};
 use mac_address::MacAddress;
 use rand::random;
 use std::{
@@ -8,6 +8,7 @@ use std::{
 
 fn main() {
     // Setup sockets
+    // ? Should this use the ANY socket? This may pick the wrong interface
     let wsock = UdpSocket::bind("0.0.0.0:67").expect("Cannot bind to outbound UDP socket");
     wsock
         .set_broadcast(true)
@@ -19,15 +20,15 @@ fn main() {
 
     // Send DISCOVERY message
     let transaction_token: TransactionToken = random();
-    let discovery_packet = DHCPPacket::new()
+    let discovery_packet = DhcpPacket::new()
         .with_transaction(&transaction_token)
         .with_mac_address(&MacAddress::new([0x10, 0x7b, 0x44, 0x93, 0xe6, 0xd0]))
-        .with_option(DHCPOption::new(53, vec![0x1]))
-        .with_option(DHCPOption::new(
+        .with_option(DhcpOption::new(53, vec![0x1]))
+        .with_option(DhcpOption::new(
             50,
             Ipv4Addr::new(192, 168, 1, 99).octets().to_vec(),
         ))
-        .with_option(DHCPOption::new(55, vec![1, 3, 15, 6]));
+        .with_option(DhcpOption::new(55, vec![1, 3, 15, 6]));
     wsock
         .send(&discovery_packet.serialize())
         .expect("Send discovery packet failed");
@@ -35,11 +36,14 @@ fn main() {
     // Wait for OFFER message
     rsock.set_read_timeout(Some(Duration::new(10, 0))).unwrap();
     loop {
-        let mut r_buffer = [0x0; 1024];
-        rsock
-            .recv(&mut r_buffer)
-            .expect("No OFFER message received");
-        println!("{:?}", r_buffer);
+        let mut rbuffer = [0x0; 1024];
+        let rsize = rsock.recv(&mut rbuffer).expect("No OFFER message received");
+        println!("{:?}", rbuffer);
+
+        // ! TODO if rsize == rbuffer.capacity, we have lost data
+
+        let rbuffer_sliced = &rbuffer[0..rsize].into();
+        let rpacket = DhcpPacket::deserialize(rbuffer_sliced);
     }
     // Send REQUEST message
 

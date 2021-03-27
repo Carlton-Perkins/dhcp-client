@@ -7,7 +7,7 @@ use crate::dhcp::traits::{Deserialize, Serialize};
 pub type TransactionToken = [u8; 4];
 
 #[derive(Eq, PartialEq, Debug)]
-pub struct DHCPPacket {
+pub struct DhcpPacket {
     op: u8,
     htype: u8,
     hlen: u8,
@@ -21,18 +21,18 @@ pub struct DHCPPacket {
     giaddr: [u8; 4],
     chaddr: [u8; 208],
     cookie: [u8; 4],
-    options: Vec<DHCPOption>,
+    options: Vec<DhcpOption>,
 }
 
 #[derive(Eq, PartialEq, Debug)]
-pub struct DHCPOption {
+pub struct DhcpOption {
     id: u8,
     body: Vec<u8>,
 }
 
-impl DHCPPacket {
+impl DhcpPacket {
     pub fn new() -> Self {
-        DHCPPacket {
+        DhcpPacket {
             op: 0x01,
             htype: 0x01,
             hlen: 0x06,
@@ -55,7 +55,7 @@ impl DHCPPacket {
         self
     }
 
-    pub fn with_option(mut self, option: DHCPOption) -> Self {
+    pub fn with_option(mut self, option: DhcpOption) -> Self {
         self.options.push(option);
         self
     }
@@ -72,7 +72,7 @@ impl DHCPPacket {
         self
     }
 }
-impl Serialize for DHCPPacket {
+impl Serialize for DhcpPacket {
     fn serialize(&self) -> Vec<u8> {
         let mut buffer = Vec::new();
 
@@ -104,19 +104,19 @@ impl Serialize for DHCPPacket {
     }
 }
 
-impl Deserialize for DHCPPacket {
-    fn deserialize(data: &Vec<u8>) -> Self {
+impl Deserialize for DhcpPacket {
+    fn deserialize(data: &Vec<u8>) -> Option<Self> {
         todo!()
     }
 }
 
-impl DHCPOption {
+impl DhcpOption {
     pub fn new(id: u8, body: Vec<u8>) -> Self {
-        DHCPOption { id, body }
+        DhcpOption { id, body }
     }
 }
 
-impl Serialize for DHCPOption {
+impl Serialize for DhcpOption {
     fn serialize(&self) -> Vec<u8> {
         let mut buffer = Vec::new();
 
@@ -127,8 +127,8 @@ impl Serialize for DHCPOption {
     }
 }
 
-impl Deserialize for DHCPOption {
-    fn deserialize(data: &Vec<u8>) -> Self {
+impl Deserialize for DhcpOption {
+    fn deserialize(data: &Vec<u8>) -> Option<Self> {
         todo!()
     }
 }
@@ -143,7 +143,7 @@ mod dhcp_packet {
         // where length is the byte size of the body
 
         assert_eq!(
-            DHCPOption {
+            DhcpOption {
                 id: 53,
                 body: vec![0x01]
             }
@@ -151,7 +151,7 @@ mod dhcp_packet {
             vec![0x35, 0x01, 0x01]
         ); // Type message
         assert_eq!(
-            DHCPOption {
+            DhcpOption {
                 id: 61,
                 body: vec![0x01, 0x10, 0x7b, 0x44, 0x93, 0xe6, 0xd0]
             }
@@ -165,32 +165,36 @@ mod dhcp_packet {
         // Vec<u8> should deserialize to options
 
         assert_eq!(
-            DHCPOption {
+            DhcpOption {
                 id: 53,
                 body: vec![0x01]
             },
-            DHCPOption::deserialize(&vec![0x35, 0x01, 0x01])
+            DhcpOption::deserialize(&vec![0x35, 0x01, 0x01]).unwrap()
         ); // Type message
         assert_eq!(
-            DHCPOption {
+            DhcpOption {
                 id: 61,
                 body: vec![0x01, 0x10, 0x7b, 0x44, 0x93, 0xe6, 0xd0]
             },
-            DHCPOption::deserialize(&vec![0x3d, 0x07, 0x01, 0x10, 0x7b, 0x44, 0x93, 0xe6, 0xd0]),
+            DhcpOption::deserialize(&vec![0x3d, 0x07, 0x01, 0x10, 0x7b, 0x44, 0x93, 0xe6, 0xd0])
+                .unwrap(),
         ); // Client identifer
     }
     #[test]
     fn test_serialize_packet() {
         assert_eq!(
-            DHCPPacket::new().serialize().len(), // TODO Using u8 len instead of real value for now
+            DhcpPacket::new().serialize().len(), // TODO Using u8 len instead of real value for now
             12
         )
     }
 
     #[test]
     fn test_deserialize_packet() {
-        let packet = DHCPPacket::new();
+        let packet = DhcpPacket::new();
 
-        assert_eq!(DHCPPacket::deserialize(&packet.serialize()), packet);
+        assert_eq!(
+            DhcpPacket::deserialize(&packet.serialize()).unwrap(),
+            packet
+        );
     }
 }

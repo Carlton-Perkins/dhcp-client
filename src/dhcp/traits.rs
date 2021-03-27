@@ -3,5 +3,7 @@ pub trait Serialize {
 }
 
 pub trait Deserialize {
-    fn deserialize(data: &Vec<u8>) -> Self;
+    fn deserialize(data: &Vec<u8>) -> Option<Self>
+    where
+        Self: Sized;
 }
