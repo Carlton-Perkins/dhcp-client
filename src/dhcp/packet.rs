@@ -3,6 +3,7 @@ use mac_address::MacAddress;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use std::{convert::TryInto, net::Ipv4Addr, time::Duration};
+
 pub type TransactionToken = [u8; 4];
 
 #[derive(Copy, Clone, Eq, PartialEq, FromPrimitive)]
@@ -200,6 +201,8 @@ impl Serialize for DhcpPacket {
 impl Deserialize for DhcpPacket {
     type Out = Self;
     fn deserialize(data: &[u8]) -> Option<Self::Out> {
+        // All of these try intos are to make unsized &[u8] into fixed sized [u8, n]
+        // failure will only be possible if changing the data structure of DhcpPacket
         let op = data[0];
         let htype = data[1];
         let hlen = data[2];
@@ -215,7 +218,6 @@ impl Deserialize for DhcpPacket {
         let cookie = data[236..240].try_into().unwrap();
         let options = DhcpOption::deserialize(&data[240..]).unwrap();
 
-        // ! TODO add error handling for unwraps
         Some(DhcpPacket {
             op,
             htype,
@@ -246,8 +248,8 @@ impl Serialize for DhcpOption {
     fn serialize(&self) -> Self::Out {
         let mut buffer = Vec::new();
 
-        buffer.push(self.id);
-        buffer.push(self.body.len().try_into().unwrap());
+        buffer.extend_from_slice(&[self.id]);
+        buffer.extend_from_slice(&[self.body.len().try_into().unwrap()]);
         buffer.extend_from_slice(&self.body);
         buffer
     }
