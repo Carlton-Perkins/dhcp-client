@@ -1,3 +1,4 @@
+use anyhow::{anyhow, Result};
 use dchp_client::dhcp::{
     Deserialize, DhcpMessageType, DhcpOption, DhcpOptionType::*, DhcpPacket, Serialize,
     TransactionToken,
@@ -9,7 +10,7 @@ use simple_logger::SimpleLogger;
 use std::{net::UdpSocket, time::Duration};
 
 const BUFFER_SIZE: usize = 1024;
-fn main() {
+fn main() -> Result<()> {
     // Setup logging
     SimpleLogger::new().init().unwrap();
 
@@ -43,7 +44,11 @@ fn main() {
     let offer_packet = loop {
         info!("Waiting for response...");
         let mut rbuffer = [0; BUFFER_SIZE];
-        let rsize = rsock.recv(&mut rbuffer).expect("No OFFER message received");
+        let rsize_result = rsock.recv(&mut rbuffer);
+        if rsize_result.is_err() {
+            return Err(anyhow!("No OFFER message recieved"));
+        }
+        let rsize = rsize_result.unwrap();
         let rbuffer_sliced = &rbuffer[0..rsize];
         let rpacket = DhcpPacket::deserialize(rbuffer_sliced).expect("OFFER packet not parseable");
         let is_correct_packet =
@@ -58,15 +63,14 @@ fn main() {
     let offered_ip = offer_packet.get_client_ip();
     let offered_lease_time = offer_packet
         .get_lease_time()
-        .expect("Offer message lease time was not parseable");
+        .expect("Offer message lease time was not parseable")
+        .as_secs();
     let dhcp_server_ip = offer_packet
         .get_server_ip()
         .expect("Offer message dhcp server ip was not parseable");
     info!(
         "DHCP Server {} offered ip {} with a lease of {}s",
-        dhcp_server_ip,
-        offered_ip,
-        offered_lease_time.as_secs()
+        dhcp_server_ip, offered_ip, offered_lease_time
     );
 
     // Send REQUEST message
@@ -86,18 +90,20 @@ fn main() {
             dhcp_server_ip.octets().to_vec(),
         ));
 
-    info!("Sending DHCPOFFER packet");
+    info!("Sending DHCPREQUEST packet");
     wsock
         .send(&request_packet.serialize())
-        .expect("Failed to send offer packet");
+        .expect("Failed to send request packet");
 
     // Wait for ACK/NAK message
     let ack_packet = loop {
         info!("Waiting for response...");
         let mut rbuffer = [0; BUFFER_SIZE];
-        let rsize = rsock
-            .recv(&mut rbuffer)
-            .expect("No ACK/NAK message received");
+        let rsize_result = rsock.recv(&mut rbuffer);
+        if rsize_result.is_err() {
+            return Err(anyhow!("No ACK/NAK message recieved"));
+        }
+        let rsize = rsize_result.unwrap();
         let rbuffer_sliced = &rbuffer[0..rsize];
         let rpacket =
             DhcpPacket::deserialize(rbuffer_sliced).expect("ACK/NAK packet not parseable");
@@ -118,23 +124,20 @@ fn main() {
     // Process ACK/NAK message
     let is_ack_message = ack_packet.get_type().unwrap() == DhcpMessageType::Ack;
     let offered_ip = ack_packet.get_client_ip();
-    let offered_lease_time = ack_packet.get_lease_time().unwrap();
+    let offered_lease_time = ack_packet.get_lease_time().unwrap().as_secs();
     let dhcp_server_ip = ack_packet.get_server_ip().unwrap();
     if is_ack_message {
         info!(
             "DHCP Server {} accepted the assigned ip {} with a lease of {}s",
-            dhcp_server_ip,
-            offered_ip,
-            offered_lease_time.as_secs()
+            dhcp_server_ip, offered_ip, offered_lease_time
         );
     } else {
         error!(
             "DHCP Server {} refused assigned ip {} with a lease of {}s",
-            dhcp_server_ip,
-            offered_ip,
-            offered_lease_time.as_secs()
+            dhcp_server_ip, offered_ip, offered_lease_time
         );
     }
+    Ok(())
 }
 
 fn setup_sockets() -> (UdpSocket, UdpSocket) {

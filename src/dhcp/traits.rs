@@ -1,6 +1,5 @@
 pub trait Serialize {
     type Out;
-
     fn serialize(&self) -> Self::Out;
 }
 

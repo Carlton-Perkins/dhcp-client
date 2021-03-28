@@ -11,13 +11,14 @@ Carlton Perkins
     - [x] DHCP REQUEST
     - [x] DHCP ACKNOWLEDGE
   - [x] Progress should be printed to the console
-- [ ] Nice CLI for various input arguments
-  - [ ] Mac address used
-  - [ ] Network interface used
-  - [ ] Ip requested
-  - [ ] Lease time requested
-  - [ ] Renew existing lease
-  - [ ] Release existing lease
+- [ ] Improvements:
+  - [ ] Nice CLI for various input arguments
+    - [ ] Mac address used
+    - [ ] Network interface used
+    - [ ] Ip requested
+    - [ ] Lease time requested
+    - [ ] Renew existing lease
+    - [ ] Release existing lease
 
 ## Plan
 
